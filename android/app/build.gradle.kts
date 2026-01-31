@@ -1,7 +1,6 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // Flutter Gradle Plugin
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -14,17 +13,20 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
 
-        // ✅ REQUIRED for flutter_local_notifications
+        // REQUIRED for flutter_local_notifications + timezone
         isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = "11"
     }
 
     defaultConfig {
         applicationId = "com.example.untitled4"
+
+        // ⚠️ IMPORTANT: must be at least 21 for notifications + image picker
         minSdk = flutter.minSdkVersion
+
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -32,13 +34,14 @@ android {
 
     buildTypes {
         release {
+            // OK for now (debug signing)
             signingConfig = signingConfigs.getByName("debug")
         }
     }
 }
 
 dependencies {
-    // ✅ REQUIRED desugaring dependency
+    // REQUIRED for Java 8+ APIs used by notifications
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }
 

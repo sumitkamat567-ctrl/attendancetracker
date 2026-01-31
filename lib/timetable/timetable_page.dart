@@ -1,12 +1,43 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../models/timetable_slot.dart';
 import '../models/subject.dart';
 import 'add_course_page.dart';
+import 'timetable_image_preview_page.dart';
 
-class TimetablePage extends StatelessWidget {
+class TimetablePage extends StatefulWidget {
   const TimetablePage({super.key});
+
+  @override
+  State<TimetablePage> createState() => _TimetablePageState();
+}
+
+class _TimetablePageState extends State<TimetablePage> {
+  final ImagePicker _picker = ImagePicker();
+
+  // ================= IMAGE PICKER =================
+
+  Future<void> _pickTimetableImage() async {
+    final image = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 90,
+    );
+
+    if (image == null || !mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TimetableImagePreviewPage(
+          imageFile: File(image.path),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,10 +46,9 @@ class TimetablePage extends StatelessWidget {
         valueListenable: Hive.box<TimetableSlot>('timetable').listenable(),
         builder: (context, Box<TimetableSlot> timetableBox, _) {
           if (timetableBox.isEmpty) {
-            return _emptyState(context);
+            return _emptyState();
           }
-
-          return _timetableList(context, timetableBox);
+          return _timetableList(timetableBox);
         },
       ),
     );
@@ -26,20 +56,16 @@ class TimetablePage extends StatelessWidget {
 
   // ================= EMPTY STATE =================
 
-  Widget _emptyState(BuildContext context) {
+  Widget _emptyState() {
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "My Timetable",
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
+          _header(),
           const Spacer(),
 
           Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: const [
               Icon(Icons.schedule, size: 90, color: Colors.green),
               SizedBox(height: 20),
@@ -49,14 +75,16 @@ class TimetablePage extends StatelessWidget {
               ),
               SizedBox(height: 8),
               Text(
-                "Add courses to build your schedule",
+                "Add courses or scan timetable image",
                 style: TextStyle(color: Colors.grey),
               ),
             ],
           ),
 
           const Spacer(),
-          _addCourseButton(context),
+          _scanTimetableButton(),
+          const SizedBox(height: 12),
+          _addCourseButton(),
         ],
       ),
     );
@@ -64,7 +92,7 @@ class TimetablePage extends StatelessWidget {
 
   // ================= TIMETABLE LIST =================
 
-  Widget _timetableList(BuildContext context, Box<TimetableSlot> timetableBox) {
+  Widget _timetableList(Box<TimetableSlot> timetableBox) {
     final subjectBox = Hive.box<Subject>('subjects');
     final slots = timetableBox.values.toList();
 
@@ -73,10 +101,7 @@ class TimetablePage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "My Timetable",
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
+          _header(),
           const SizedBox(height: 20),
 
           Expanded(
@@ -88,7 +113,6 @@ class TimetablePage extends StatelessWidget {
                 final subject = subjectBox.get(slot.subjectId);
 
                 return _dismissibleTile(
-                  context,
                   slot,
                   subject?.name ?? "Unknown",
                 );
@@ -96,30 +120,45 @@ class TimetablePage extends StatelessWidget {
             ),
           ),
 
-          _addCourseButton(context),
+          _scanTimetableButton(),
+          const SizedBox(height: 12),
+          _addCourseButton(),
         ],
       ),
     );
   }
 
-  // ================= DISMISSIBLE TILE =================
+  // ================= HEADER =================
 
-  Widget _dismissibleTile(
-      BuildContext context,
-      TimetableSlot slot,
-      String subjectName,
-      ) {
-    return Dismissible(
-      key: ValueKey(slot.key),
-      direction: DismissDirection.endToStart,
-      background: _deleteBackground(),
-      confirmDismiss: (_) => _confirmDelete(context),
-      onDismissed: (_) => _deleteSlot(slot),
-      child: _courseTile(subjectName, slot),
+  Widget _header() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text(
+          "My Timetable",
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        ),
+        IconButton(
+          icon: const Icon(Icons.upload_file, color: Colors.green),
+          tooltip: "Upload timetable image",
+          onPressed: _pickTimetableImage,
+        ),
+      ],
     );
   }
 
   // ================= COURSE TILE =================
+
+  Widget _dismissibleTile(TimetableSlot slot, String subjectName) {
+    return Dismissible(
+      key: ValueKey(slot.key),
+      direction: DismissDirection.endToStart,
+      background: _deleteBackground(),
+      confirmDismiss: (_) => _confirmDelete(),
+      onDismissed: (_) => _deleteSlot(slot),
+      child: _courseTile(subjectName, slot),
+    );
+  }
 
   Widget _courseTile(String name, TimetableSlot slot) {
     return Container(
@@ -156,7 +195,7 @@ class TimetablePage extends StatelessWidget {
     );
   }
 
-  // ================= DELETE BACKGROUND =================
+  // ================= DELETE =================
 
   Widget _deleteBackground() {
     return Container(
@@ -166,24 +205,18 @@ class TimetablePage extends StatelessWidget {
         color: Colors.red.shade700,
         borderRadius: BorderRadius.circular(14),
       ),
-      child: const Icon(
-        Icons.delete,
-        color: Colors.white,
-        size: 28,
-      ),
+      child: const Icon(Icons.delete, color: Colors.white, size: 28),
     );
   }
 
-  // ================= CONFIRM DELETE =================
-
-  Future<bool> _confirmDelete(BuildContext context) async {
+  Future<bool> _confirmDelete() async {
     return await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: const Color(0xFF1B1B1B),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (sheetContext) {
+      builder: (_) {
         return Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -191,10 +224,7 @@ class TimetablePage extends StatelessWidget {
             children: [
               const Text(
                 "Delete course?",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
               const Text(
@@ -202,15 +232,11 @@ class TimetablePage extends StatelessWidget {
                 style: TextStyle(color: Colors.grey),
               ),
               const SizedBox(height: 20),
-
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey.shade800,
-                      ),
-                      onPressed: () => Navigator.pop(sheetContext, false),
+                      onPressed: () => Navigator.pop(context, false),
                       child: const Text("Cancel"),
                     ),
                   ),
@@ -220,7 +246,7 @@ class TimetablePage extends StatelessWidget {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red,
                       ),
-                      onPressed: () => Navigator.pop(sheetContext, true),
+                      onPressed: () => Navigator.pop(context, true),
                       child: const Text("Delete"),
                     ),
                   ),
@@ -230,18 +256,13 @@ class TimetablePage extends StatelessWidget {
           ),
         );
       },
-    ) ??
-        false;
+    ) ?? false;
   }
-
-
-  // ================= DELETE LOGIC =================
 
   void _deleteSlot(TimetableSlot slot) {
     final subjectBox = Hive.box<Subject>('subjects');
     final timetableBox = Hive.box<TimetableSlot>('timetable');
 
-    // delete subject only if no other slots use it
     final stillUsed = timetableBox.values.any(
           (s) => s.subjectId == slot.subjectId && s.key != slot.key,
     );
@@ -253,18 +274,16 @@ class TimetablePage extends StatelessWidget {
     slot.delete();
   }
 
-  // ================= ADD COURSE BUTTON =================
+  // ================= BUTTONS =================
 
-  Widget _addCourseButton(BuildContext context) {
+  Widget _addCourseButton() {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => const AddCoursePage(),
-            ),
+            MaterialPageRoute(builder: (_) => const AddCoursePage()),
           );
         },
         icon: const Icon(Icons.add),
@@ -280,26 +299,40 @@ class TimetablePage extends StatelessWidget {
     );
   }
 
+  Widget _scanTimetableButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _pickTimetableImage,
+        icon: const Icon(Icons.camera_alt, color: Colors.green),
+        label: const Text(
+          "Scan Timetable Image",
+          style: TextStyle(color: Colors.green),
+        ),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.all(16),
+          side: const BorderSide(color: Colors.green),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      ),
+    );
+  }
+
   // ================= HELPERS =================
 
   static String _weekdayName(int day) {
-    switch (day) {
-      case 1:
-        return "Monday";
-      case 2:
-        return "Tuesday";
-      case 3:
-        return "Wednesday";
-      case 4:
-        return "Thursday";
-      case 5:
-        return "Friday";
-      case 6:
-        return "Saturday";
-      case 7:
-        return "Sunday";
-      default:
-        return "";
-    }
+    const days = [
+      "",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+      "Sunday"
+    ];
+    return days[day];
   }
 }
