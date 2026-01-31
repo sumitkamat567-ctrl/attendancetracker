@@ -1,11 +1,15 @@
 import 'package:hive/hive.dart';
+
 import '../models/subject.dart';
 import '../models/attendance_action.dart';
 import '../notifications/notification_service.dart';
 
 class AttendanceEngine {
   final Box<Subject> _subjects = Hive.box<Subject>('subjects');
-  final Box<AttendanceAction> _actions = Hive.box<AttendanceAction>('actions');
+  final Box<AttendanceAction> _actions =
+  Hive.box<AttendanceAction>('actions');
+
+  /* ───────────────── MARK / REPLACE ATTENDANCE ───────────────── */
 
   void markAttendance({
     required String subjectId,
@@ -17,12 +21,30 @@ class AttendanceEngine {
 
     final actionDate = date ?? DateTime.now();
 
-    final alreadyMarked = _actions.values.any(
-          (a) => a.subjectId == subjectId && _sameDay(a.date, actionDate),
-    );
+    AttendanceAction? existing;
+    for (final a in _actions.values) {
+      if (a.subjectId == subjectId && _sameDay(a.date, actionDate)) {
+        existing = a;
+        break;
+      }
+    }
 
-    if (alreadyMarked) return;
+    final prevPercent = subject.percentage;
 
+    // Remove existing record (replace logic)
+    if (existing != null) {
+      _actions.delete(existing.key);
+
+      subject.totalClasses =
+          (subject.totalClasses - 1).clamp(0, 9999);
+
+      if (existing.wasPresent) {
+        subject.presentClasses =
+            (subject.presentClasses - 1).clamp(0, 9999);
+      }
+    }
+
+    // Apply new attendance
     subject.totalClasses += 1;
     if (present) subject.presentClasses += 1;
     subject.save();
@@ -35,17 +57,49 @@ class AttendanceEngine {
       ),
     );
 
-    // 🔔 CHECK LOW ATTENDANCE
-    final percent = subject.percentage;
-    // Notify if attendance drops below 75% immediately after marking
-    if (percent > 0 && percent < 75) {
-      NotificationService.showLowAttendance(
-        id: subject.hashCode,
-        subjectName: subject.name,
-        percent: percent,
-      );
-    }
+    final newPercent = subject.percentage;
+
+    _handleNotifications(
+      subject: subject,
+      prevPercent: prevPercent,
+      newPercent: newPercent,
+    );
   }
+
+  /* ───────────────── CLEAR SPECIFIC DATE ───────────────── */
+
+  void clearAttendanceForDate({
+    required String subjectId,
+    required DateTime date,
+  }) {
+    AttendanceAction? target;
+
+    for (final a in _actions.values) {
+      if (a.subjectId == subjectId && _sameDay(a.date, date)) {
+        target = a;
+        break;
+      }
+    }
+
+    if (target == null) return;
+
+    final subject = _subjects.get(subjectId);
+    if (subject == null) return;
+
+    // Reverse counts
+    subject.totalClasses =
+        (subject.totalClasses - 1).clamp(0, 9999);
+
+    if (target.wasPresent) {
+      subject.presentClasses =
+          (subject.presentClasses - 1).clamp(0, 9999);
+    }
+
+    subject.save();
+    _actions.delete(target.key);
+  }
+
+  /* ───────────────── GLOBAL UNDO (LAST ACTION) ───────────────── */
 
   void undoLastAction() {
     if (_actions.isEmpty) return;
@@ -56,16 +110,67 @@ class AttendanceEngine {
     final subject = _subjects.get(last.subjectId);
     if (subject == null) return;
 
-    subject.totalClasses = (subject.totalClasses - 1).clamp(0, 9999);
+    subject.totalClasses =
+        (subject.totalClasses - 1).clamp(0, 9999);
 
     if (last.wasPresent) {
-      subject.presentClasses = (subject.presentClasses - 1).clamp(0, 9999);
+      subject.presentClasses =
+          (subject.presentClasses - 1).clamp(0, 9999);
     }
 
     subject.save();
     _actions.deleteAt(_actions.length - 1);
   }
 
+  /* ───────────────── NOTIFICATIONS ───────────────── */
+
+  void _handleNotifications({
+    required Subject subject,
+    required double prevPercent,
+    required double newPercent,
+  }) {
+    // 🔴 Critical zone
+    if (newPercent < 60 && prevPercent >= 60) {
+      NotificationService.showCriticalLowAttendance(
+        id: subject.hashCode,
+        subjectName: subject.name,
+        percent: newPercent,
+      );
+      subject.warnedLowAttendance = true;
+      subject.save();
+      return;
+    }
+
+    // 🟡 Warning zone
+    if (newPercent >= 60 &&
+        newPercent < 75 &&
+        prevPercent >= 75) {
+      NotificationService.showGentleReminder(
+        id: subject.hashCode,
+        subjectName: subject.name,
+        percent: newPercent,
+      );
+      subject.warnedLowAttendance = true;
+      subject.save();
+      return;
+    }
+
+    // 🟢 Recovery
+    if (newPercent >= 75 && prevPercent < 75) {
+      NotificationService.showRecoveryPraise(
+        id: subject.hashCode + 999,
+        subjectName: subject.name,
+        percent: newPercent,
+      );
+      subject.warnedLowAttendance = false;
+      subject.save();
+    }
+  }
+
+  /* ───────────────── HELPERS ───────────────── */
+
   bool _sameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
+      a.year == b.year &&
+          a.month == b.month &&
+          a.day == b.day;
 }
