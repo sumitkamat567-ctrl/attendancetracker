@@ -1,16 +1,19 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:untitled4/home/settings_page.dart';
 
 import '../models/subject.dart';
+import '../models/timetable_slot.dart';
 import '../status/subject_history_page.dart';
 import '../utils/daily_quotes.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
-  static const Color bg = Color(0xFF0E0F11);
+  static const Color bg = Color(0xFF121212);
   static const Color textPrimary = Colors.white;
   static const Color textSecondary = Color(0xFF9A9AA0);
 
@@ -23,87 +26,114 @@ class HomePage extends StatelessWidget {
       backgroundColor: bg,
       body: SafeArea(
         child: ValueListenableBuilder(
-          valueListenable: Hive.box<Subject>('subjects').listenable(),
-          builder: (_, Box<Subject> box, __) {
-            final subjects = box.values.toList();
+          valueListenable: Hive.box<TimetableSlot>('timetable').listenable(),
+          builder: (context, timetableBox, _) {
+            return ValueListenableBuilder(
+              valueListenable: Hive.box<Subject>('subjects').listenable(),
+              builder: (_, Box<Subject> subjectBox, __) {
+                // 🔍 Filter: Show subjects in current timetable OR with attendance history
+                final activeSubjectIds = timetableBox.values.map((s) => s.subjectId).toSet();
+                
+                final subjects = subjectBox.values.where((s) {
+                  final inTimetable = activeSubjectIds.contains(s.id);
+                  final hasAttendance = s.totalClasses > 0;
+                  return inTimetable || hasAttendance;
+                }).toList();
 
-            final totalClasses =
-            subjects.fold<int>(0, (sum, s) => sum + s.totalClasses);
-            final presentClasses =
-            subjects.fold<int>(0, (sum, s) => sum + s.presentClasses);
+                // 🏗️ Sort: Active (Timetable) subjects first, then alphabetical
+                subjects.sort((a, b) {
+                  final aIn = activeSubjectIds.contains(a.id);
+                  final bIn = activeSubjectIds.contains(b.id);
+                  if (aIn && !bIn) return -1;
+                  if (!aIn && bIn) return 1;
+                  return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+                });
 
-            final overallPercent = totalClasses == 0
-                ? 0.0
-                : (presentClasses / totalClasses) * 100;
+                final totalClasses =
+                subjects.fold<int>(0, (sum, s) => sum + s.totalClasses);
+                final presentClasses =
+                subjects.fold<int>(0, (sum, s) => sum + s.presentClasses);
 
-            return CustomScrollView(
-              physics: const BouncingScrollPhysics(
-                parent: AlwaysScrollableScrollPhysics(),
-              ),
-              slivers: [
-                _ProfileHeader(
-                  userName: userName,
-                  overallPercent: overallPercent,
-                ),
+                final overallPercent = totalClasses == 0
+                    ? 0.0
+                    : (presentClasses / totalClasses) * 100;
 
-                SliverToBoxAdapter(
-                  child: _SummaryCard(
-                    present: presentClasses,
-                    total: totalClasses,
-                    percent: overallPercent,
+                return CustomScrollView(
+                  physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
                   ),
-                ),
+                  slivers: [
+                    _ProfileHeader(
+                      userName: userName,
+                      overallPercent: overallPercent,
+                    ),
 
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(20, 28, 20, 12),
-                    child: Text(
-                      "Your Classes",
-                      style: TextStyle(
-                        color: HomePage.textPrimary,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
+                    SliverToBoxAdapter(
+                      child: _SummaryCard(
+                        present: presentClasses,
+                        total: totalClasses,
+                        percent: overallPercent,
                       ),
                     ),
-                  ),
-                ),
 
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                        final subject = subjects[index];
-                        final percent = subject.totalClasses == 0
-                            ? 0.0
-                            : subject.percentage;
-
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 14),
-                          child: _TapScale(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      SubjectHistoryPage(subject: subject),
-                                ),
-                              );
-                            },
-                            child: FullCardProgress(
-                              title: subject.name,
-                              percent: percent,
-                              color: _colorFromPercentage(percent),
-                              icon: _iconForPercent(percent),
+                    if (subjects.isNotEmpty)
+                      const SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(20, 28, 20, 12),
+                          child: Text(
+                            "Your Classes",
+                            style: TextStyle(
+                              color: HomePage.textPrimary,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        );
-                      },
-                      childCount: subjects.length,
+                        ),
+                      ),
+
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                            final subject = subjects[index];
+                            final percent = subject.totalClasses == 0
+                                ? 0.0
+                                : subject.percentage;
+
+                            final isInTimetable = activeSubjectIds.contains(subject.id);
+
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 14),
+                              child: _TapScale(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          SubjectHistoryPage(subject: subject),
+                                    ),
+                                  );
+                                },
+                                child: Opacity(
+                                  opacity: isInTimetable ? 1.0 : 0.6,
+                                  child: FullCardProgress(
+                                    title: subject.name + (isInTimetable ? "" : " (Inactive)"),
+                                    percent: percent,
+                                    color: _colorFromPercentage(percent),
+                                    icon: _iconForPercent(percent),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                          childCount: subjects.length,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ],
+                  ],
+                );
+              },
             );
           },
         ),
@@ -157,11 +187,9 @@ class _ProfileHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final quote = DailyQuotes.getDailyQuote(overallPercent);
 
-    // ✅ SAFE name parsing (done inside build)
     final parts = userName.trim().split(RegExp(r'\s+'));
     final firstName = parts.isNotEmpty ? parts.first : '';
-    final lastName =
-    parts.length > 1 ? parts.sublist(1).join(' ') : '';
+    final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
 
     return SliverPadding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
@@ -169,7 +197,6 @@ class _ProfileHeader extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // NAME + ACTIONS
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -185,6 +212,7 @@ class _ProfileHeader extends StatelessWidget {
                           color: Colors.white,
                           fontSize: 32,
                           fontWeight: FontWeight.w600,
+                          letterSpacing: -1.2,
                         ),
                       ),
                       if (lastName.isNotEmpty)
@@ -193,23 +221,38 @@ class _ProfileHeader extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.bricolageGrotesque(
-                            color: Colors.white,
-                            fontSize: 32, // SAME SIZE
+                            color: Colors.white.withValues(alpha: 0.5), // Professional contrast
+                            fontSize: 32,
                             fontWeight: FontWeight.w600,
+                            letterSpacing: -1.2,
                           ),
                         ),
                     ],
                   ),
                 ),
-                const _CircleButton(icon: Icons.notifications_none),
+                // Notifications Action
+                _CircleButton(
+                  icon: Icons.notifications_none,
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    // Implementation for Sir Ji alerts
+                  },
+                ),
                 const SizedBox(width: 8),
-                const _CircleButton(icon: Icons.settings_outlined),
+                // Linked Settings Action
+                _CircleButton(
+                  icon: Icons.settings_outlined,
+                  onTap: () {
+                    HapticFeedback.mediumImpact(); // Premium tactile feel
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const SettingsPage()),
+                    );
+                  },
+                ),
               ],
             ),
-
-            const SizedBox(height: 16),
-
-            // DAILY QUOTE
+            const SizedBox(height: 20),
             _AnimatedQuote(text: quote),
           ],
         ),
@@ -480,21 +523,32 @@ class _TapScaleState extends State<_TapScale> {
 }
 
 /* ───────────────── ICON BUTTON ───────────────── */
-
+/* ───────────────── INTERACTIVE ICON BUTTON ───────────────── */
 class _CircleButton extends StatelessWidget {
   final IconData icon;
-  const _CircleButton({required this.icon});
+  final VoidCallback onTap;
+
+  const _CircleButton({
+    required this.icon,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: const Color(0xFF1C1D21),
-        borderRadius: BorderRadius.circular(12),
+    return _TapScale(
+      onTap: onTap,
+      child: Container(
+        width: 42, // Slightly larger for better touch target
+        height: 42,
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1D21),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.05),
+          ),
+        ),
+        child: Icon(icon, color: Colors.white, size: 20),
       ),
-      child: Icon(icon, color: Colors.white, size: 18),
     );
   }
 }

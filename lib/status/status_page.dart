@@ -1,116 +1,114 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../models/timetable_slot.dart';
 import '../models/subject.dart';
-import '../status/subject_history_page.dart';
+import '../storage/attendance_engine.dart';
 
-class StatusPage extends StatelessWidget {
+class StatusPage extends StatefulWidget {
   const StatusPage({super.key});
 
   @override
+  State<StatusPage> createState() => _StatusPageState();
+}
+
+class _StatusPageState extends State<StatusPage> {
+  late int _selectedDay;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDay = DateTime.now().weekday;
+  }
+
+  static const Color _surfaceBackground = Color(0xFF121212);
+  static const Color _accentColor = Color(0xFF818CF8);
+
+  @override
   Widget build(BuildContext context) {
-    final today = DateTime.now().weekday;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF111111),
+      backgroundColor: _surfaceBackground,
       body: SafeArea(
+        bottom: false, // For the custom dock feel
         child: ValueListenableBuilder(
           valueListenable: Hive.box<TimetableSlot>('timetable').listenable(),
           builder: (context, Box<TimetableSlot> timetableBox, _) {
-            final todaySlots =
-            timetableBox.values.where((s) => s.weekday == today).toList();
+            return ValueListenableBuilder(
+              valueListenable: Hive.box<Subject>('subjects').listenable(),
+              builder: (context, Box<Subject> subjectBox, _) {
+                final daySlots = timetableBox.values.where((s) => s.weekday == _selectedDay).toList();
 
-            if (todaySlots.isEmpty) {
-              return _EmptyToday();
-            }
+                // Sort slots by time
+                daySlots.sort((a, b) => a.startTime.compareTo(b.startTime));
 
-            final subjectBox = Hive.box<Subject>('subjects');
-            final todaySubjects = todaySlots
-                .map((s) => subjectBox.get(s.subjectId))
-                .whereType<Subject>()
-                .toList();
+                final todaySubjects = daySlots
+                    .map((s) => subjectBox.get(s.subjectId))
+                    .whereType<Subject>()
+                    .toList();
 
-            final lowestAttendance = todaySubjects.isEmpty
-                ? 100.0
-                : todaySubjects
-                .map((s) => s.percentage)
-                .reduce((a, b) => a < b ? a : b);
+                final lowestAttendance = todaySubjects.isEmpty
+                    ? 100.0
+                    : todaySubjects.map((s) => s.percentage).reduce((a, b) => a < b ? a : b);
 
-            final quote = _quoteForToday(
-              lowestAttendance: lowestAttendance,
-              totalClasses: todaySubjects.length,
-            );
-
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _Header(),
-                  const SizedBox(height: 16),
-
-                  // Quote
-                  Text(
-                    quote,
-                    style: GoogleFonts.bricolageGrotesque(
-                      fontSize: 18,
-                      height: 1.4,
-                      color: Colors.white,
+                return CustomScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  slivers: [
+                    _buildSliverHeader(),
+                    
+                    SliverToBoxAdapter(
+                      child: _DaySelector(
+                        selectedDay: _selectedDay,
+                        onChanged: (day) => setState(() => _selectedDay = day),
+                      ),
                     ),
-                  ),
 
-                  const SizedBox(height: 20),
+                    if (daySlots.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: _EmptyState(day: _selectedDay),
+                      )
+                    else ...[
+                      const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        sliver: SliverToBoxAdapter(
+                          child: _AttendanceInsightCard(
+                            attendance: lowestAttendance,
+                            count: todaySubjects.length,
+                          ),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 40, 24, 16),
+                          child: _SectionLabel("SCHEDULED SESSIONS"),
+                        ),
+                      ),
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                                (context, index) {
+                              final slot = daySlots[index];
+                              final subject = subjectBox.get(slot.subjectId);
+                              if (subject == null) return const SizedBox();
 
-                  // Metrics
-                  _TodayMetrics(
-                    total: todaySubjects.length,
-                    lowestAttendance: lowestAttendance,
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  Text(
-                    "Today's Classes",
-                    style: GoogleFonts.bricolageGrotesque(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  Expanded(
-                    child: ListView.separated(
-                      itemCount: todaySlots.length,
-                      separatorBuilder: (_, __) =>
-                      const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final slot = todaySlots[index];
-                        final subject =
-                        subjectBox.get(slot.subjectId);
-                        if (subject == null) return const SizedBox();
-
-                        return _ClassTile(
-                          subject: subject,
-                          slot: slot,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    SubjectHistoryPage(subject: subject),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
+                              return _StatusClassTile(
+                                subject: subject,
+                                slot: slot,
+                              );
+                            },
+                            childCount: daySlots.length,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+              },
             );
           },
         ),
@@ -118,169 +116,174 @@ class StatusPage extends StatelessWidget {
     );
   }
 
-  /* ───────── QUOTE LOGIC ───────── */
-
-  String _quoteForToday({
-    required double lowestAttendance,
-    required int totalClasses,
-  }) {
-    if (totalClasses == 0) {
-      return "No classes today. Take the time to rest and reset.";
-    }
-
-    if (lowestAttendance < 60) {
-      return "Today matters. Missing even one class now can push recovery further away.";
-    }
-
-    if (lowestAttendance < 75) {
-      return "You’re close to the edge. Attending today keeps you in control.";
-    }
-
-    return "You’re doing well. Showing up today keeps your momentum strong.";
-  }
-}
-
-/* ───────────────── HEADER ───────────────── */
-
-class _Header extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      "Today",
-      style: GoogleFonts.bricolageGrotesque(
-        fontSize: 28,
-        fontWeight: FontWeight.w700,
-        color: Colors.white,
+  Widget _buildSliverHeader() {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: _accentColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                "LIVE OVERVIEW",
+                style: GoogleFonts.bricolageGrotesque(
+                  color: _accentColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              "Status",
+              style: GoogleFonts.bricolageGrotesque(
+                fontSize: 40,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: -1.2,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/* ───────────────── EMPTY STATE ───────────────── */
+class _AttendanceInsightCard extends StatelessWidget {
+  final double attendance;
+  final int count;
 
-class _EmptyToday extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.event_available,
-              size: 80, color: Colors.white54),
-          const SizedBox(height: 16),
-          Text(
-            "No classes today",
-            style: GoogleFonts.bricolageGrotesque(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            "Use the day to recharge.",
-            style: GoogleFonts.bricolageGrotesque(
-              color: Colors.white38,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/* ───────────────── METRICS ───────────────── */
-
-class _TodayMetrics extends StatelessWidget {
-  final int total;
-  final double lowestAttendance;
-
-  const _TodayMetrics({
-    required this.total,
-    required this.lowestAttendance,
-  });
+  const _AttendanceInsightCard({required this.attendance, required this.count});
 
   @override
   Widget build(BuildContext context) {
-    final riskText = lowestAttendance < 75 ? "At Risk" : "Safe";
+    final bool isCritical = attendance < 75;
+    final color = isCritical ? const Color(0xFFFF3B30) : const Color(0xFF818CF8);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1C),
-        borderRadius: BorderRadius.circular(20),
+        color: const Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _metric("Classes", total.toString()),
-          _metric(
-            "Lowest %",
-            lowestAttendance.toStringAsFixed(1),
-          ),
-          _metric("Status", riskText),
-        ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(32),
+        child: Stack(
+          children: [
+            // Subtle Background Glow
+            Positioned(
+              top: -50,
+              right: -50,
+              child: Container(
+                width: 150,
+                height: 150,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: color.withValues(alpha: 0.1),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _MetricItem("LOWEST", "${attendance.toStringAsFixed(0)}%", color),
+                      _MetricItem("DAILY", count.toString(), Colors.white),
+                      _MetricItem("ZONE", isCritical ? "CRITICAL" : "HEALTHY", color),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const Divider(color: Colors.white10, height: 1),
+                  const SizedBox(height: 20),
+                  Text(
+                    isCritical
+                        ? "Attendance is below threshold. Attendance today is vital for subject stability."
+                        : "All systems operational. Your current momentum supports future flexibility.",
+                    style: GoogleFonts.bricolageGrotesque(
+                      color: Colors.white38,
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
+}
 
-  Widget _metric(String label, String value) {
+class _MetricItem extends StatelessWidget {
+  final String label, value;
+  final Color valueColor;
+  const _MetricItem(this.label, this.value, this.valueColor);
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          value,
-          style: GoogleFonts.bricolageGrotesque(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: GoogleFonts.bricolageGrotesque(
-            fontSize: 12,
-            color: Colors.white38,
-          ),
-        ),
+        Text(label, style: GoogleFonts.bricolageGrotesque(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
+        const SizedBox(height: 6),
+        Text(value, style: GoogleFonts.jetBrainsMono(color: valueColor, fontSize: 18, fontWeight: FontWeight.w800)),
       ],
     );
   }
 }
 
-/* ───────────────── CLASS TILE ───────────────── */
-
-class _ClassTile extends StatelessWidget {
+class _StatusClassTile extends StatelessWidget {
   final Subject subject;
   final TimetableSlot slot;
-  final VoidCallback onTap;
 
-  const _ClassTile({
-    required this.subject,
-    required this.slot,
-    required this.onTap,
-  });
+  const _StatusClassTile({required this.subject, required this.slot});
 
   @override
   Widget build(BuildContext context) {
     final isRisk = subject.percentage < 75;
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
+    return GestureDetector(
+      onTap: () => _showAttendanceActions(context),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: const Color(0xFF1B1B1B),
-          borderRadius: BorderRadius.circular(18),
+          color: const Color(0xFF1E1E1E),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
         ),
         child: Row(
           children: [
-            Icon(
-              Icons.class_,
-              color: isRisk ? Colors.redAccent : Colors.white,
+            // Time Component
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                    slot.startTime.split(' ')[0],
+                    style: GoogleFonts.jetBrainsMono(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)
+                ),
+                Text(
+                    slot.startTime.contains('PM') ? 'PM' : 'AM',
+                    style: GoogleFonts.bricolageGrotesque(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.w800)
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 20),
+            Container(height: 40, width: 1, color: Colors.white10),
+            const SizedBox(width: 20),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -289,30 +292,272 @@ class _ClassTile extends StatelessWidget {
                     subject.name,
                     style: GoogleFonts.bricolageGrotesque(
                       fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      color: isRisk ? const Color(0xFFFF3B30) : Colors.white,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    "${slot.startTime} – ${slot.endTime}",
-                    style: GoogleFonts.bricolageGrotesque(
-                      color: Colors.white38,
-                      fontSize: 13,
-                    ),
+                    "Required: 75%",
+                    style: GoogleFonts.bricolageGrotesque(color: Colors.white24, fontSize: 12),
                   ),
                 ],
               ),
             ),
-            Text(
-              "${subject.percentage.toStringAsFixed(0)}%",
-              style: GoogleFonts.bricolageGrotesque(
-                fontWeight: FontWeight.w600,
-                color: isRisk ? Colors.redAccent : Colors.white,
+            // Percentage Badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: isRisk ? const Color(0xFFFF3B30).withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                "${subject.percentage.toStringAsFixed(0)}%",
+                style: GoogleFonts.jetBrainsMono(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  color: isRisk ? const Color(0xFFFF3B30) : const Color(0xFF818CF8),
+                ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showAttendanceActions(BuildContext context) {
+    HapticFeedback.lightImpact();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        margin: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2C2C2E),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    child: Column(
+                      children: [
+                        Text(
+                          subject.name.toUpperCase(),
+                          style: GoogleFonts.bricolageGrotesque(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white38,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Mark today's attendance",
+                          style: GoogleFonts.bricolageGrotesque(
+                            fontSize: 12,
+                            color: Colors.white38,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1, color: Colors.white10),
+                  _ActionTile(
+                    label: "Mark Present",
+                    icon: Icons.check_circle_rounded,
+                    color: const Color(0xFF34C759),
+                    onTap: () {
+                      AttendanceEngine().markAttendance(
+                        subjectId: subject.id,
+                        present: true,
+                      );
+                      Navigator.pop(context);
+                      HapticFeedback.mediumImpact();
+                    },
+                  ),
+                  const Divider(height: 1, color: Colors.white10),
+                  _ActionTile(
+                    label: "Mark Absent",
+                    icon: Icons.cancel_rounded,
+                    color: const Color(0xFFFF3B30),
+                    onTap: () {
+                      AttendanceEngine().markAttendance(
+                        subjectId: subject.id,
+                        present: false,
+                      );
+                      Navigator.pop(context);
+                      HapticFeedback.mediumImpact();
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2C2C2E),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  "Cancel",
+                  style: GoogleFonts.bricolageGrotesque(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionTile extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionTile({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onTap,
+      child: SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: GoogleFonts.bricolageGrotesque(
+                fontSize: 18,
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DaySelector extends StatelessWidget {
+  final int selectedDay;
+  final ValueChanged<int> onChanged;
+
+  const _DaySelector({required this.selectedDay, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    return SizedBox(
+      height: 44,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: 7,
+        itemBuilder: (context, index) {
+          final dayValue = index + 1;
+          final isSelected = dayValue == selectedDay;
+
+          return GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              onChanged(dayValue);
+            },
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: isSelected ? const Color(0xFF818CF8) : Colors.white.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Text(
+                  days[index],
+                  style: GoogleFonts.bricolageGrotesque(
+                    color: isSelected ? Colors.black : Colors.white60,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: GoogleFonts.bricolageGrotesque(
+          color: Colors.white24,
+          fontSize: 11,
+          letterSpacing: 1.5,
+          fontWeight: FontWeight.w900
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final int day;
+  const _EmptyState({required this.day});
+  
+  @override
+  Widget build(BuildContext context) {
+    final dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.radio_button_checked_rounded, size: 48, color: Colors.white.withValues(alpha: 0.05)),
+          const SizedBox(height: 20),
+          Text(
+            "SYSTEM IDLE",
+            style: GoogleFonts.bricolageGrotesque(
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                color: Colors.white24,
+                letterSpacing: 2
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "No sessions for ${dayNames[day - 1]}.",
+            style: GoogleFonts.bricolageGrotesque(color: Colors.white10, fontSize: 14),
+          ),
+        ],
       ),
     );
   }

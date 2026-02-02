@@ -4,6 +4,7 @@ import 'core/theme/app_theme.dart';
 import 'navigation/bottom_nav.dart';
 import 'storage/local_storage.dart';
 import 'notifications/notification_service.dart';
+import 'notifications/reminder_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,6 +14,9 @@ Future<void> main() async {
 
   // ✅ Initialize notifications (required for Android 13+)
   await NotificationService.init();
+
+  // ✅ Schedule class reminders
+  await ReminderService.rescheduleAll();
 
   runApp(const RollCallApp());
 }
