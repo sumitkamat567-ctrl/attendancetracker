@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../storage/local_storage.dart';
+import '../notifications/notification_service.dart';
 import 'bottom_nav.dart';
 
 class HazriOnboarding extends StatefulWidget {
@@ -37,50 +37,32 @@ class _HazriOnboardingState extends State<HazriOnboarding> {
   }
 
   Future<void> _checkPermissions() async {
-    final plugin = FlutterLocalNotificationsPlugin();
-    final android = plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final notifEnabled = await NotificationService.areNotificationsEnabled();
+    final alarmEnabled = await NotificationService.canScheduleExactAlarms();
 
-    if (android != null) {
-      final notifEnabled = await android.areNotificationsEnabled() ?? false;
-      // For alarms, we assume granted if notifications are enabled (will request when needed)
-      setState(() {
-        _notificationGranted = notifEnabled;
-        _alarmGranted = notifEnabled; // Linked for simplicity
-        _isCheckingPermissions = false;
-      });
-    } else {
-      setState(() => _isCheckingPermissions = false);
-    }
+    setState(() {
+      _notificationGranted = notifEnabled;
+      _alarmGranted = alarmEnabled;
+      _isCheckingPermissions = false;
+    });
   }
 
   Future<void> _requestNotificationPermission() async {
-    final plugin = FlutterLocalNotificationsPlugin();
-    final android = plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-
-    if (android != null) {
-      final granted = await android.requestNotificationsPermission() ?? false;
-      setState(() => _notificationGranted = granted);
-    }
+    final granted = await NotificationService.requestNotificationPermission();
+    setState(() => _notificationGranted = granted);
   }
 
   Future<void> _requestAlarmPermission() async {
-    final plugin = FlutterLocalNotificationsPlugin();
-    final android = plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-
-    if (android != null) {
-      await android.requestExactAlarmsPermission();
-      // After requesting, we assume it's granted (system will handle denial)
-      setState(() => _alarmGranted = true);
-    }
+    // Mark that user explicitly requested alarm permission
+    await LocalStorage.setAlarmPermissionRequested(true);
+    await NotificationService.requestExactAlarmPermission();
+    // Re-check after user returns from settings
+    await _checkPermissions();
   }
 
   Future<void> _requestAllPermissions() async {
     await _requestNotificationPermission();
     await _requestAlarmPermission();
-    await _checkPermissions();
   }
 
   void _nextPage() {

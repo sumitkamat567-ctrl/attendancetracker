@@ -17,6 +17,7 @@ class LocalStorage {
   static const String keyNotificationsEnabled = 'notificationsEnabled';
   static const String keyClassroomMode = 'classroomMode';
   static const String keyLowAttendanceAlerts = 'lowAttendanceAlerts';
+  static const String keyAlarmPermissionRequested = 'alarmPermissionRequested';
 
   // ───────────────── GETTERS ─────────────────
   static double get targetAttendance =>
@@ -30,6 +31,9 @@ class LocalStorage {
 
   static bool get lowAttendanceAlerts =>
       settingsBox.get(keyLowAttendanceAlerts, defaultValue: true);
+
+  static bool get alarmPermissionRequested =>
+      settingsBox.get(keyAlarmPermissionRequested, defaultValue: false);
 
   // ───────────────── SETTERS ─────────────────
   static Future<void> setTargetAttendance(double value) async {
@@ -46,6 +50,10 @@ class LocalStorage {
 
   static Future<void> setLowAttendanceAlerts(bool value) async {
     await settingsBox.put(keyLowAttendanceAlerts, value);
+  }
+
+  static Future<void> setAlarmPermissionRequested(bool value) async {
+    await settingsBox.put(keyAlarmPermissionRequested, value);
   }
 
   static Future<void> init() async {

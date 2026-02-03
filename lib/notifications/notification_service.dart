@@ -133,17 +133,49 @@ class NotificationService {
 
     await _plugin.initialize(initSettings);
 
-    // Request notification permissions for Android 13+
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+    // NOTE: We do NOT automatically request permissions here.
+    // Permissions should only be requested via onboarding or settings page
+    // when the user explicitly chooses to enable them.
+  }
 
-    // Request exact alarm permission for scheduled notifications
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestExactAlarmsPermission();
+  /// Check if exact alarms are permitted (does NOT open settings)
+  static Future<bool> canScheduleExactAlarms() async {
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    if (android != null) {
+      return await android.canScheduleExactNotifications() ?? false;
+    }
+    return false;
+  }
+
+  /// Check if notifications are enabled
+  static Future<bool> areNotificationsEnabled() async {
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    if (android != null) {
+      return await android.areNotificationsEnabled() ?? false;
+    }
+    return false;
+  }
+
+  /// Request notification permission (shows system dialog)
+  static Future<bool> requestNotificationPermission() async {
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    if (android != null) {
+      return await android.requestNotificationsPermission() ?? false;
+    }
+    return false;
+  }
+
+  /// Request exact alarm permission (opens system settings)
+  /// Only call this when user explicitly requests it!
+  static Future<void> requestExactAlarmPermission() async {
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    if (android != null) {
+      await android.requestExactAlarmsPermission();
+    }
   }
 
   /* ───────────────── CHANNELS ───────────────── */

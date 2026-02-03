@@ -12,22 +12,45 @@ class SettingsPage extends StatefulWidget {
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+class _SettingsPageState extends State<SettingsPage>
+    with WidgetsBindingObserver {
   late bool _notificationsEnabled;
   late double _minAttendance;
   late bool _classroomMode;
   late bool _lowAttendanceAlerts;
   int _pendingNotifications = 0;
+  bool _exactAlarmsEnabled = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Load settings from storage
     _notificationsEnabled = LocalStorage.notificationsEnabled;
     _minAttendance = LocalStorage.targetAttendance;
     _classroomMode = LocalStorage.classroomMode;
     _lowAttendanceAlerts = LocalStorage.lowAttendanceAlerts;
     _loadPendingCount();
+    _checkExactAlarmPermission();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Re-check permissions when app resumes (user returns from settings)
+    if (state == AppLifecycleState.resumed) {
+      _checkExactAlarmPermission();
+    }
+  }
+
+  Future<void> _checkExactAlarmPermission() async {
+    final enabled = await NotificationService.canScheduleExactAlarms();
+    if (mounted) setState(() => _exactAlarmsEnabled = enabled);
   }
 
   Future<void> _loadPendingCount() async {
@@ -85,6 +108,12 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _onLowAttendanceAlertsChanged(bool value) async {
     setState(() => _lowAttendanceAlerts = value);
     await LocalStorage.setLowAttendanceAlerts(value);
+  }
+
+  Future<void> _requestExactAlarms() async {
+    await LocalStorage.setAlarmPermissionRequested(true);
+    await NotificationService.requestExactAlarmPermission();
+    // Permission will be re-checked when app resumes via didChangeAppLifecycleState
   }
 
   Future<void> _testNotification() async {
@@ -189,6 +218,21 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: Icons.alarm_on_rounded,
                   trailing:
                       _switch(_notificationsEnabled, _onNotificationsChanged),
+                ),
+                _buildTile(
+                  title: "Exact Alarms",
+                  desc: _exactAlarmsEnabled
+                      ? "Enabled — reminders will be precise"
+                      : "Tap to enable precise scheduling",
+                  icon: Icons.schedule_rounded,
+                  trailing: _exactAlarmsEnabled
+                      ? const Icon(Icons.check_circle_rounded,
+                          color: Color(0xFF22C55E), size: 28)
+                      : IconButton(
+                          icon: const Icon(Icons.settings_rounded,
+                              color: Colors.white54),
+                          onPressed: _requestExactAlarms,
+                        ),
                 ),
                 _buildSectionHeader("Risk Management"),
                 _buildTile(
