@@ -23,14 +23,10 @@ class _StatusPageState extends State<StatusPage> {
     _selectedDay = DateTime.now().weekday;
   }
 
-  static const Color _surfaceBackground = Color(0xFF121212);
-  static const Color _accentColor = Color(0xFF818CF8);
-
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
-      backgroundColor: _surfaceBackground,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         bottom: false, // For the custom dock feel
         child: ValueListenableBuilder(
@@ -39,7 +35,9 @@ class _StatusPageState extends State<StatusPage> {
             return ValueListenableBuilder(
               valueListenable: Hive.box<Subject>('subjects').listenable(),
               builder: (context, Box<Subject> subjectBox, _) {
-                final daySlots = timetableBox.values.where((s) => s.weekday == _selectedDay).toList();
+                final daySlots = timetableBox.values
+                    .where((s) => s.weekday == _selectedDay)
+                    .toList();
 
                 // Sort slots by time
                 daySlots.sort((a, b) => a.startTime.compareTo(b.startTime));
@@ -51,20 +49,20 @@ class _StatusPageState extends State<StatusPage> {
 
                 final lowestAttendance = todaySubjects.isEmpty
                     ? 100.0
-                    : todaySubjects.map((s) => s.percentage).reduce((a, b) => a < b ? a : b);
+                    : todaySubjects
+                        .map((s) => s.percentage)
+                        .reduce((a, b) => a < b ? a : b);
 
                 return CustomScrollView(
                   physics: const BouncingScrollPhysics(),
                   slivers: [
                     _buildSliverHeader(),
-                    
                     SliverToBoxAdapter(
                       child: _DaySelector(
                         selectedDay: _selectedDay,
                         onChanged: (day) => setState(() => _selectedDay = day),
                       ),
                     ),
-
                     if (daySlots.isEmpty)
                       SliverFillRemaining(
                         hasScrollBody: false,
@@ -88,10 +86,10 @@ class _StatusPageState extends State<StatusPage> {
                         ),
                       ),
                       SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 140),
                         sliver: SliverList(
                           delegate: SliverChildBuilderDelegate(
-                                (context, index) {
+                            (context, index) {
                               final slot = daySlots[index];
                               final subject = subjectBox.get(slot.subjectId);
                               if (subject == null) return const SizedBox();
@@ -119,27 +117,10 @@ class _StatusPageState extends State<StatusPage> {
   Widget _buildSliverHeader() {
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        padding: const EdgeInsets.fromLTRB(20, 15, 20, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: _accentColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                "LIVE OVERVIEW",
-                style: GoogleFonts.bricolageGrotesque(
-                  color: _accentColor,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.5,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
             Text(
               "Status",
               style: GoogleFonts.bricolageGrotesque(
@@ -165,12 +146,13 @@ class _AttendanceInsightCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isCritical = attendance < 75;
-    final color = isCritical ? const Color(0xFFFF3B30) : const Color(0xFF818CF8);
+    final color =
+        isCritical ? const Color(0xFFFF3B30) : Theme.of(context).primaryColor;
 
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(32),
         border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
@@ -199,9 +181,11 @@ class _AttendanceInsightCard extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _MetricItem("LOWEST", "${attendance.toStringAsFixed(0)}%", color),
+                      _MetricItem(
+                          "LOWEST", "${attendance.toStringAsFixed(0)}%", color),
                       _MetricItem("DAILY", count.toString(), Colors.white),
-                      _MetricItem("ZONE", isCritical ? "CRITICAL" : "HEALTHY", color),
+                      _MetricItem(
+                          "ZONE", isCritical ? "CRITICAL" : "HEALTHY", color),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -237,9 +221,16 @@ class _MetricItem extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: GoogleFonts.bricolageGrotesque(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
+        Text(label,
+            style: GoogleFonts.bricolageGrotesque(
+                color: Colors.white24,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1)),
         const SizedBox(height: 6),
-        Text(value, style: GoogleFonts.jetBrainsMono(color: valueColor, fontSize: 18, fontWeight: FontWeight.w800)),
+        Text(value,
+            style: GoogleFonts.jetBrainsMono(
+                color: valueColor, fontSize: 18, fontWeight: FontWeight.w800)),
       ],
     );
   }
@@ -261,7 +252,7 @@ class _StatusClassTile extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E),
+          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
         ),
@@ -271,14 +262,16 @@ class _StatusClassTile extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                    slot.startTime.split(' ')[0],
-                    style: GoogleFonts.jetBrainsMono(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)
-                ),
-                Text(
-                    slot.startTime.contains('PM') ? 'PM' : 'AM',
-                    style: GoogleFonts.bricolageGrotesque(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.w800)
-                ),
+                Text(slot.startTime.split(' ')[0],
+                    style: GoogleFonts.jetBrainsMono(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700)),
+                Text(slot.startTime.contains('PM') ? 'PM' : 'AM',
+                    style: GoogleFonts.bricolageGrotesque(
+                        color: Colors.white24,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800)),
               ],
             ),
             const SizedBox(width: 20),
@@ -299,7 +292,8 @@ class _StatusClassTile extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     "Required: 75%",
-                    style: GoogleFonts.bricolageGrotesque(color: Colors.white24, fontSize: 12),
+                    style: GoogleFonts.bricolageGrotesque(
+                        color: Colors.white24, fontSize: 12),
                   ),
                 ],
               ),
@@ -308,7 +302,9 @@ class _StatusClassTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: isRisk ? const Color(0xFFFF3B30).withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.05),
+                color: isRisk
+                    ? const Color(0xFFFF3B30).withValues(alpha: 0.1)
+                    : Colors.white.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -316,7 +312,9 @@ class _StatusClassTile extends StatelessWidget {
                 style: GoogleFonts.jetBrainsMono(
                   fontWeight: FontWeight.w800,
                   fontSize: 14,
-                  color: isRisk ? const Color(0xFFFF3B30) : const Color(0xFF818CF8),
+                  color: isRisk
+                      ? const Color(0xFFFF3B30)
+                      : Theme.of(context).primaryColor,
                 ),
               ),
             ),
@@ -492,7 +490,9 @@ class _DaySelector extends StatelessWidget {
               margin: const EdgeInsets.symmetric(horizontal: 4),
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF818CF8) : Colors.white.withValues(alpha: 0.05),
+                color: isSelected
+                    ? Theme.of(context).primaryColor
+                    : Colors.white.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Center(
@@ -524,8 +524,7 @@ class _SectionLabel extends StatelessWidget {
           color: Colors.white24,
           fontSize: 11,
           letterSpacing: 1.5,
-          fontWeight: FontWeight.w900
-      ),
+          fontWeight: FontWeight.w900),
     );
   }
 }
@@ -533,15 +532,24 @@ class _SectionLabel extends StatelessWidget {
 class _EmptyState extends StatelessWidget {
   final int day;
   const _EmptyState({required this.day});
-  
+
   @override
   Widget build(BuildContext context) {
-    final dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    final dayNames = [
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+      "Sunday"
+    ];
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.radio_button_checked_rounded, size: 48, color: Colors.white.withValues(alpha: 0.05)),
+          Icon(Icons.radio_button_checked_rounded,
+              size: 48, color: Colors.white.withValues(alpha: 0.05)),
           const SizedBox(height: 20),
           Text(
             "SYSTEM IDLE",
@@ -549,13 +557,13 @@ class _EmptyState extends StatelessWidget {
                 fontSize: 12,
                 fontWeight: FontWeight.w900,
                 color: Colors.white24,
-                letterSpacing: 2
-            ),
+                letterSpacing: 2),
           ),
           const SizedBox(height: 8),
           Text(
             "No sessions for ${dayNames[day - 1]}.",
-            style: GoogleFonts.bricolageGrotesque(color: Colors.white10, fontSize: 14),
+            style: GoogleFonts.bricolageGrotesque(
+                color: Colors.white10, fontSize: 14),
           ),
         ],
       ),

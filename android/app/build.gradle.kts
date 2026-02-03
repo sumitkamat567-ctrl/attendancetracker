@@ -36,6 +36,14 @@ android {
         release {
             // OK for now (debug signing)
             signingConfig = signingConfigs.getByName("debug")
+            
+            // ProGuard rules for ML Kit
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }

@@ -3,11 +3,11 @@ import 'package:hive/hive.dart';
 import '../models/subject.dart';
 import '../models/attendance_action.dart';
 import '../notifications/notification_service.dart';
+import 'local_storage.dart';
 
 class AttendanceEngine {
   final Box<Subject> _subjects = Hive.box<Subject>('subjects');
-  final Box<AttendanceAction> _actions =
-  Hive.box<AttendanceAction>('actions');
+  final Box<AttendanceAction> _actions = Hive.box<AttendanceAction>('actions');
 
   /* ───────────────── MARK / REPLACE ATTENDANCE ───────────────── */
 
@@ -35,12 +35,10 @@ class AttendanceEngine {
     if (existing != null) {
       _actions.delete(existing.key);
 
-      subject.totalClasses =
-          (subject.totalClasses - 1).clamp(0, 9999);
+      subject.totalClasses = (subject.totalClasses - 1).clamp(0, 9999);
 
       if (existing.wasPresent) {
-        subject.presentClasses =
-            (subject.presentClasses - 1).clamp(0, 9999);
+        subject.presentClasses = (subject.presentClasses - 1).clamp(0, 9999);
       }
     }
 
@@ -87,12 +85,10 @@ class AttendanceEngine {
     if (subject == null) return;
 
     // Reverse counts
-    subject.totalClasses =
-        (subject.totalClasses - 1).clamp(0, 9999);
+    subject.totalClasses = (subject.totalClasses - 1).clamp(0, 9999);
 
     if (target.wasPresent) {
-      subject.presentClasses =
-          (subject.presentClasses - 1).clamp(0, 9999);
+      subject.presentClasses = (subject.presentClasses - 1).clamp(0, 9999);
     }
 
     subject.save();
@@ -110,12 +106,10 @@ class AttendanceEngine {
     final subject = _subjects.get(last.subjectId);
     if (subject == null) return;
 
-    subject.totalClasses =
-        (subject.totalClasses - 1).clamp(0, 9999);
+    subject.totalClasses = (subject.totalClasses - 1).clamp(0, 9999);
 
     if (last.wasPresent) {
-      subject.presentClasses =
-          (subject.presentClasses - 1).clamp(0, 9999);
+      subject.presentClasses = (subject.presentClasses - 1).clamp(0, 9999);
     }
 
     subject.save();
@@ -129,8 +123,14 @@ class AttendanceEngine {
     required double prevPercent,
     required double newPercent,
   }) {
-    // 🔴 Critical zone
-    if (newPercent < 60 && prevPercent >= 60) {
+    // Skip if low attendance alerts are disabled
+    if (!LocalStorage.lowAttendanceAlerts) return;
+
+    final target = LocalStorage.targetAttendance;
+    final criticalThreshold = target - 15; // 15% below target is critical
+
+    // 🔴 Critical zone (target - 15%)
+    if (newPercent < criticalThreshold && prevPercent >= criticalThreshold) {
       NotificationService.showCriticalLowAttendance(
         id: subject.hashCode,
         subjectName: subject.name,
@@ -141,10 +141,10 @@ class AttendanceEngine {
       return;
     }
 
-    // 🟡 Warning zone
-    if (newPercent >= 60 &&
-        newPercent < 75 &&
-        prevPercent >= 75) {
+    // 🟡 Warning zone (below target but not critical)
+    if (newPercent >= criticalThreshold &&
+        newPercent < target &&
+        prevPercent >= target) {
       NotificationService.showGentleReminder(
         id: subject.hashCode,
         subjectName: subject.name,
@@ -155,8 +155,8 @@ class AttendanceEngine {
       return;
     }
 
-    // 🟢 Recovery
-    if (newPercent >= 75 && prevPercent < 75) {
+    // 🟢 Recovery (back above target)
+    if (newPercent >= target && prevPercent < target) {
       NotificationService.showRecoveryPraise(
         id: subject.hashCode + 999,
         subjectName: subject.name,
@@ -170,7 +170,5 @@ class AttendanceEngine {
   /* ───────────────── HELPERS ───────────────── */
 
   bool _sameDay(DateTime a, DateTime b) =>
-      a.year == b.year &&
-          a.month == b.month &&
-          a.day == b.day;
+      a.year == b.year && a.month == b.month && a.day == b.day;
 }

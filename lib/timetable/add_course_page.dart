@@ -76,7 +76,7 @@ class _AddCoursePageState extends State<AddCoursePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
@@ -295,7 +295,7 @@ class _SymmetricJogPickerOverlayState extends State<_SymmetricJogPickerOverlay> 
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
         decoration: BoxDecoration(
-          color: active ? const Color(0xFFBB86FC) : Colors.white.withValues(alpha: 0.04),
+          color: active ? Theme.of(context).primaryColor : Colors.white.withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(40),
         ),
         child: Text(label, style: GoogleFonts.bricolageGrotesque(color: active ? Colors.black : Colors.white24, fontWeight: FontWeight.w800, fontSize: 13)),
@@ -311,7 +311,7 @@ class _SymmetricJogPickerOverlayState extends State<_SymmetricJogPickerOverlay> 
         width: 68,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: primary ? const Color(0xFFBB86FC) : Colors.white.withValues(alpha: 0.06),
+          color: primary ? Theme.of(context).primaryColor : Colors.white.withValues(alpha: 0.06),
         ),
         child: Icon(icon, color: primary ? Colors.black : Colors.white, size: 28),
       ),
@@ -380,7 +380,7 @@ class _SmoothDialState extends State<_SmoothDial> {
                 angle: _rotation,
                 child: CustomPaint(
                   size: Size(widget.size, widget.size),
-                  painter: _SmoothDialPainter(),
+                  painter: _SmoothDialPainter(accentColor: Theme.of(context).primaryColor),
                 ),
               ),
               Positioned(
@@ -391,7 +391,7 @@ class _SmoothDialState extends State<_SmoothDial> {
                   child: Text(
                     widget.label,
                     style: GoogleFonts.bricolageGrotesque(
-                      color: const Color(0xFFBB86FC).withValues(alpha: 0.2),
+                      color: Theme.of(context).primaryColor.withValues(alpha: 0.2),
                       fontWeight: FontWeight.w900,
                       fontSize: 10,
                       letterSpacing: 4,
@@ -408,6 +408,9 @@ class _SmoothDialState extends State<_SmoothDial> {
 }
 
 class _SmoothDialPainter extends CustomPainter {
+  final Color accentColor;
+  _SmoothDialPainter({required this.accentColor});
+
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
@@ -418,7 +421,7 @@ class _SmoothDialPainter extends CustomPainter {
       final double angle = (i * 2 * pi / 60);
       final bool isPurple = i % 5 == 0;
 
-      paint.color = isPurple ? const Color(0xFFBB86FC).withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.05);
+      paint.color = isPurple ? accentColor.withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.05);
       paint.strokeWidth = isPurple ? 3.0 : 1.0;
 
       double tickLength = isPurple ? 35 : 15;
@@ -450,7 +453,7 @@ class _TimeDisplayBox extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
         decoration: BoxDecoration(
-          color: const Color(0xFF121212),
+          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: Colors.white.withValues(alpha: 0.03)),
         ),
@@ -500,7 +503,7 @@ class _HorizonDaySelector extends StatelessWidget {
           AnimatedPositioned(
             duration: const Duration(milliseconds: 300),
             left: (selectedDay - 1) * itemWidth,
-            child: Container(width: itemWidth, height: 40, decoration: BoxDecoration(color: const Color(0xFFBB86FC).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10))),
+            child: Container(width: itemWidth, height: 40, decoration: BoxDecoration(color: Theme.of(context).primaryColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10))),
           ),
           Row(
             children: List.generate(7, (i) {
@@ -508,7 +511,7 @@ class _HorizonDaySelector extends StatelessWidget {
               return Expanded(
                 child: GestureDetector(
                   onTap: () { HapticFeedback.selectionClick(); onChanged(i + 1); },
-                  child: Container(height: 40, alignment: Alignment.center, child: Text(days[i], style: GoogleFonts.bricolageGrotesque(fontSize: 11, fontWeight: isSelected ? FontWeight.w800 : FontWeight.w400, color: isSelected ? const Color(0xFFBB86FC) : Colors.white24))),
+                  child: Container(height: 40, alignment: Alignment.center, child: Text(days[i], style: GoogleFonts.bricolageGrotesque(fontSize: 11, fontWeight: isSelected ? FontWeight.w800 : FontWeight.w400, color: isSelected ? Theme.of(context).primaryColor : Colors.white24))),
                 ),
               );
             }),
@@ -526,7 +529,7 @@ class _CourseNameField extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
-      cursorColor: const Color(0xFFBB86FC),
+      cursorColor: Theme.of(context).primaryColor,
       style: GoogleFonts.bricolageGrotesque(fontSize: 32, fontWeight: FontWeight.w700, color: Colors.white),
       decoration: const InputDecoration(hintText: "Course Title", hintStyle: TextStyle(color: Colors.white10), border: InputBorder.none),
     );
@@ -553,7 +556,7 @@ class _ActionFooter extends StatelessWidget {
       decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.04)))),
       child: GestureDetector(
         onTap: onSave,
-        child: Container(height: 64, width: double.infinity, decoration: BoxDecoration(color: const Color(0xFFBB86FC), borderRadius: BorderRadius.circular(20)), child: Center(child: Text(label, style: GoogleFonts.bricolageGrotesque(fontWeight: FontWeight.w900, color: Colors.black, fontSize: 16)))),
+        child: Container(height: 64, width: double.infinity, decoration: BoxDecoration(color: Theme.of(context).primaryColor, borderRadius: BorderRadius.circular(20)), child: Center(child: Text(label, style: GoogleFonts.bricolageGrotesque(fontWeight: FontWeight.w900, color: Colors.black, fontSize: 16)))),
       ),
     );
   }

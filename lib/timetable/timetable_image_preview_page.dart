@@ -129,7 +129,7 @@ class _TimetableImagePreviewPageState extends State<TimetableImagePreviewPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: const Color(0xFF070B14),
       body: SafeArea(
         child: Column(
           children: [

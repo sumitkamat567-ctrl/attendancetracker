@@ -3,27 +3,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:untitled4/home/settings_page.dart';
-
+import 'package:Hazri/home/settings_page.dart';
+import '../storage/local_storage.dart';
 import '../models/subject.dart';
 import '../models/timetable_slot.dart';
 import '../status/subject_history_page.dart';
 import '../utils/daily_quotes.dart';
 
 class HomePage extends StatelessWidget {
-  const HomePage({super.key});
+  HomePage({super.key});
 
-  static const Color bg = Color(0xFF121212);
-  static const Color textPrimary = Colors.white;
   static const Color textSecondary = Color(0xFF9A9AA0);
 
-  // TEMP: replace later with auth / profile data
-  final String userName = "Neal Biju";
+  // Fetch the name saved during onboarding from the Hive box
+  final String userName =
+      LocalStorage.settingsBox.get('userName', defaultValue: 'Hazri User');
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: ValueListenableBuilder(
           valueListenable: Hive.box<TimetableSlot>('timetable').listenable(),
@@ -32,8 +31,9 @@ class HomePage extends StatelessWidget {
               valueListenable: Hive.box<Subject>('subjects').listenable(),
               builder: (_, Box<Subject> subjectBox, __) {
                 // 🔍 Filter: Show subjects in current timetable OR with attendance history
-                final activeSubjectIds = timetableBox.values.map((s) => s.subjectId).toSet();
-                
+                final activeSubjectIds =
+                    timetableBox.values.map((s) => s.subjectId).toSet();
+
                 final subjects = subjectBox.values.where((s) {
                   final inTimetable = activeSubjectIds.contains(s.id);
                   final hasAttendance = s.totalClasses > 0;
@@ -50,9 +50,9 @@ class HomePage extends StatelessWidget {
                 });
 
                 final totalClasses =
-                subjects.fold<int>(0, (sum, s) => sum + s.totalClasses);
+                    subjects.fold<int>(0, (sum, s) => sum + s.totalClasses);
                 final presentClasses =
-                subjects.fold<int>(0, (sum, s) => sum + s.presentClasses);
+                    subjects.fold<int>(0, (sum, s) => sum + s.presentClasses);
 
                 final overallPercent = totalClasses == 0
                     ? 0.0
@@ -67,7 +67,6 @@ class HomePage extends StatelessWidget {
                       userName: userName,
                       overallPercent: overallPercent,
                     ),
-
                     SliverToBoxAdapter(
                       child: _SummaryCard(
                         present: presentClasses,
@@ -75,7 +74,6 @@ class HomePage extends StatelessWidget {
                         percent: overallPercent,
                       ),
                     ),
-
                     if (subjects.isNotEmpty)
                       const SliverToBoxAdapter(
                         child: Padding(
@@ -83,25 +81,25 @@ class HomePage extends StatelessWidget {
                           child: Text(
                             "Your Classes",
                             style: TextStyle(
-                              color: HomePage.textPrimary,
+                              color: Colors.white,
                               fontSize: 20,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
                       ),
-
                     SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 140),
                       sliver: SliverList(
                         delegate: SliverChildBuilderDelegate(
-                              (context, index) {
+                          (context, index) {
                             final subject = subjects[index];
                             final percent = subject.totalClasses == 0
                                 ? 0.0
                                 : subject.percentage;
 
-                            final isInTimetable = activeSubjectIds.contains(subject.id);
+                            final isInTimetable =
+                                activeSubjectIds.contains(subject.id);
 
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 14),
@@ -118,7 +116,8 @@ class HomePage extends StatelessWidget {
                                 child: Opacity(
                                   opacity: isInTimetable ? 1.0 : 0.6,
                                   child: FullCardProgress(
-                                    title: subject.name + (isInTimetable ? "" : " (Inactive)"),
+                                    title: subject.name +
+                                        (isInTimetable ? "" : " (Inactive)"),
                                     percent: percent,
                                     color: _colorFromPercentage(percent),
                                     icon: _iconForPercent(percent),
@@ -186,74 +185,77 @@ class _ProfileHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final quote = DailyQuotes.getDailyQuote(overallPercent);
-
     final parts = userName.trim().split(RegExp(r'\s+'));
     final firstName = parts.isNotEmpty ? parts.first : '';
     final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
 
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+      padding: const EdgeInsets.fromLTRB(20, 32, 20, 24),
       sliver: SliverToBoxAdapter(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        firstName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.bricolageGrotesque(
-                          color: Colors.white,
-                          fontSize: 32,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: -1.2,
-                        ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Good Morning,", // Or "Hello,"
+                      style: GoogleFonts.bricolageGrotesque(
+                        color: HomePage.textSecondary,
+                        fontSize: 14,
+                        letterSpacing: 0.5,
                       ),
-                      if (lastName.isNotEmpty)
-                        Text(
-                          lastName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.bricolageGrotesque(
-                            color: Colors.white.withValues(alpha: 0.5), // Professional contrast
-                            fontSize: 32,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: -1.2,
-                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    RichText(
+                      text: TextSpan(
+                        style: GoogleFonts.bricolageGrotesque(
+                          fontSize: 34,
+                          height: 1.1,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -1.0,
                         ),
-                    ],
-                  ),
+                        children: [
+                          TextSpan(
+                              text: firstName,
+                              style: const TextStyle(color: Colors.white)),
+                          if (lastName.isNotEmpty)
+                            TextSpan(
+                              text: " $lastName",
+                              style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.3)),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                // Notifications Action
                 _CircleButton(
-                  icon: Icons.notifications_none,
+                  icon: Icons.settings_rounded,
                   onTap: () {
                     HapticFeedback.lightImpact();
-                    // Implementation for Sir Ji alerts
-                  },
-                ),
-                const SizedBox(width: 8),
-                // Linked Settings Action
-                _CircleButton(
-                  icon: Icons.settings_outlined,
-                  onTap: () {
-                    HapticFeedback.mediumImpact(); // Premium tactile feel
                     Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const SettingsPage()),
-                    );
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const SettingsPage()));
                   },
                 ),
               ],
             ),
-            const SizedBox(height: 20),
-            _AnimatedQuote(text: quote),
+            const SizedBox(height: 24),
+            // Updated Quote styling
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.03),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+              ),
+              child: _AnimatedQuote(text: quote),
+            ),
           ],
         ),
       ),
@@ -279,27 +281,40 @@ class _SummaryCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: const Color(0xFF1C1D21),
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Row(
-          children: [
-            _SummaryItem(
-              label: "Classes Attended",
-              value: "$present",
-            ),
-            const VerticalDivider(
-              color: Colors.white24,
-              thickness: 1,
-              width: 32,
-            ),
-            _SummaryItem(
-              label: "Overall",
-              value: "${percent.toInt()}%",
-            ),
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.4),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            )
           ],
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            children: [
+              _SummaryItem(
+                label: "Attendance",
+                value: "$present",
+                subValue: "/$total classes",
+              ),
+              VerticalDivider(
+                color: Colors.white.withValues(alpha: 0.1),
+                thickness: 1,
+                indent: 10,
+                endIndent: 10,
+              ),
+              _SummaryItem(
+                label: "Overall Score",
+                value: "${percent.toInt()}%",
+                isHighlighted: true,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -309,34 +324,51 @@ class _SummaryCard extends StatelessWidget {
 class _SummaryItem extends StatelessWidget {
   final String label;
   final String value;
+  final String? subValue;
+  final bool isHighlighted;
 
   const _SummaryItem({
     required this.label,
     required this.value,
+    this.subValue,
+    this.isHighlighted = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          Text(
+            label,
+            style: GoogleFonts.bricolageGrotesque(
+              color: HomePage.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 8),
           Text(
             value,
             style: GoogleFonts.bricolageGrotesque(
-              color: Colors.white,
-              fontSize: 28,
-              fontWeight: FontWeight.w600,
+              color: isHighlighted
+                  ? Theme.of(context).primaryColor
+                  : Colors.white, // Pop of color if high
+              fontSize: 36,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -1,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.bricolageGrotesque(
-              color: HomePage.textSecondary,
-              fontSize: 13,
+          if (subValue != null)
+            Text(
+              subValue!,
+              style: GoogleFonts.bricolageGrotesque(
+                color: HomePage.textSecondary.withValues(alpha: 0.6),
+                fontSize: 11,
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -430,33 +462,36 @@ class _AnimatedQuote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chars = text.split('');
+    // Split by space to keep words together
+    final words = text.split(' ');
 
     return Wrap(
-      children: List.generate(chars.length, (i) {
-        return _DelayedFadeChar(
-          char: chars[i],
-          delayMs: i * 18,
+      spacing: 4.0, // Space between words
+      runSpacing: 2.0, // Space between lines
+      children: List.generate(words.length, (i) {
+        return _DelayedFadeWord(
+          word: words[i],
+          delayMs: i * 80, // Slightly slower delay since it's words now
         );
       }),
     );
   }
 }
 
-class _DelayedFadeChar extends StatefulWidget {
-  final String char;
+class _DelayedFadeWord extends StatefulWidget {
+  final String word;
   final int delayMs;
 
-  const _DelayedFadeChar({
-    required this.char,
+  const _DelayedFadeWord({
+    required this.word,
     required this.delayMs,
   });
 
   @override
-  State<_DelayedFadeChar> createState() => _DelayedFadeCharState();
+  State<_DelayedFadeWord> createState() => _DelayedFadeWordState();
 }
 
-class _DelayedFadeCharState extends State<_DelayedFadeChar> {
+class _DelayedFadeWordState extends State<_DelayedFadeWord> {
   bool _visible = false;
 
   @override
@@ -471,14 +506,15 @@ class _DelayedFadeCharState extends State<_DelayedFadeChar> {
   Widget build(BuildContext context) {
     return AnimatedOpacity(
       opacity: _visible ? 1 : 0,
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 400),
       curve: Curves.easeOut,
       child: Text(
-        widget.char,
+        widget.word,
         style: GoogleFonts.bricolageGrotesque(
           color: HomePage.textSecondary,
-          fontSize: 16,
-          height: 1.3,
+          fontSize: 15,
+          height: 1.4,
+          fontWeight: FontWeight.w400,
         ),
       ),
     );

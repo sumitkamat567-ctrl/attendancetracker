@@ -1,4 +1,4 @@
-name: untitled4
+name: Hazri
 description: "Attendance tracker app with timetable, organizer & undo support"
 publish_to: 'none'
 
@@ -13,7 +13,7 @@ dependencies:
   shimmer: ^3.0.0
   cupertino_icons: ^1.0.8
   google_fonts: ^6.2.1
-
+  flutter_staggered_animations: ^1.0.0
   # 🔹 Local persistent storage (Hive)
   hive: ^2.2.3
   hive_flutter: ^1.1.0
@@ -30,6 +30,12 @@ dependencies:
   # 🔹 OCR (Google ML Kit – for reading timetable image text)
   google_mlkit_text_recognition: ^0.13.0
 
+  # 🔹 High refresh rate support
+  flutter_displaymode: ^0.7.0
+
+  # 🔹 Native splash screen (before Flutter loads)
+  flutter_native_splash: ^2.4.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -40,5 +46,38 @@ dev_dependencies:
   hive_generator: ^2.0.1
   build_runner: ^2.4.11
 
+  # 🔹 App icon generation
+  flutter_launcher_icons: ^0.14.0
+
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/hazri.png
+
+  fonts:
+      - family: Samarkan
+        fonts:
+          - asset: assets/SAMAN___.ttf
+
+# 🔹 Native Splash Screen Configuration
+flutter_native_splash:
+  color: "#000000"
+  color_dark: "#000000"
+  
+  android_12:
+    color: "#000000"
+    color_dark: "#000000"
+    
+  # Keeps splash visible until Flutter is ready
+  fullscreen: true
+
+# 🔹 App Icon Configuration
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/hazri.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: "assets/hazri.png"
+  remove_alpha_ios: true
